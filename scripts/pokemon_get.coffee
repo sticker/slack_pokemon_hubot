@@ -2,7 +2,7 @@
 #   Pokemon Get!
 #
 # Commands:
-#   pokemon get/list/rank/evo/bye
+#   pokemon get/list/rank/evo/bye/item/shop
 
 request = require('request')
 
@@ -13,8 +13,10 @@ config =
        max: 151      # 対象とするポケモンIDのMAX値
        gif: "https://www.pkparaiso.com/imagenes/xy/sprites/animados/" # ポケモンgifのURLベース（後ろにファイル名を付加する必要あり）
        ball: 3       # 1日に補充されるモンスターボールの個数
-       cpMax: 3000   # 捕獲できるポケモンの最大CP
-       cpMin: 1      # 捕獲できるポケモンの最小CP
+       cpMax: 3000   # モンスターボールで捕獲できるポケモンの最大CP
+       cpMin: 1      # モンスターボールで捕獲できるポケモンの最小CP
+       cpMaxSuper: 3500   # スーパーボールで捕獲できるポケモンの最大CP
+       cpMinSuper: 1500   # スーパーボールで捕獲できるポケモンの最小CP
        evo: 1        # 1日に進化させることができる回数
        cpEvoMax: 700 # 進化時の最大増加CP
        cpEvoMin: 200 # 進化時の最小増加CP
@@ -66,6 +68,7 @@ module.exports = (robot) ->
     usage += "`@kakinbot pokemon rank` : 捕獲したポケモンの合計CPが大きい順にランキングを表示する\n"
     usage += "`@kakinbot pokemon evo [pokemonID]` : 指定したIDのポケモンを進化させる\n"
     usage += "`@kakinbot pokemon bye [pokemonID]` : 指定したIDのポケモンを野生に返す\n"
+    usage += "`@kakinbot pokemon item` : 所持しているアイテムを表示する\n"
     usage += "`@kakinbot pokemon shop [ItemID]` : 指定したIDのアイテムを購入する\n"
     res.send usage
 
@@ -74,16 +77,20 @@ module.exports = (robot) ->
   ######################################
   robot.respond /pokemon get/, (res) ->
 
-    # 1日にゲットできる回数上限チェック
+    # モンスターボール保持数チェック
     key_pokeball = "pokeball_" + res.message.user.name
     ballData = robot.brain.get(key_pokeball) ? {}
     if `ballData.pokeball == null`
         ballData.pokeball = "000000000" # nullの場合は初回アクセスなので0にリセットしておく
+    if `ballData.superball == null`
+        ballData.superball = 0          # nullの場合は初回アクセスなので0にリセットしておく
 
     # 現在保持しているモンスターボールの個数
     pokeballNow = parseInt(ballData.pokeball) - parseInt(getToday()+"0")
+    # 現在保持しているスーパーボールの個数
+    superballNow = ballData.superball
 
-    if pokeballNow == 0
+    if pokeballNow == 0 and superballNow == 0
         res.send "もうモンスターボールが無いよ...また明日調達してくるね！"
         return
     else if pokeballNow < 0
@@ -102,21 +109,40 @@ module.exports = (robot) ->
         if pokeballPlus > 0
             res.send "モンスターボールを #{pokeballPlus}個 調達したよ！"
 
-    msg = ""
-    for i in [1..pokeballNow]
-       msg += ":monster_ball:" 
-    res.send "#{msg} よーし、ポケモン捕まえてくるよ！"
+    emoji = ""
+    if pokeballNow >= 1
+      for i in [1..pokeballNow]
+        emoji += ":monster_ball:" 
+    if superballNow >= 1
+      for i in [1..superballNow]
+        emoji += ":super_ball:"
+    msg = "#{emoji} よーし、ポケモン捕まえてくるよ！"
+
+    # 使用するボールを特定
+    useball = "pokeball"
+    if pokeballNow == 0 and superballNow > 0
+        useball = "superball"
+        msg += "スーパーボールを使うよ！"
+
+    res.send msg
 
     # 数値をランダム生成して、捕まえたポケモンのIDを決定
     pokeSelect = Math.floor(Math.random() * config.max) + 1
 
-    sleep(4000)
+    #sleep(4000)
     national_id = pokeSelect
     idx = national_id - 1 # 翻訳json用の添字
 
+    cpMax = config.cpMax
+    cpMin = config.cpMin
+    # スーパーボールの場合のCP上限/下限を設定
+    if useball == "superball"
+        cpMax = config.cpMaxSuper
+        cpMin = config.cpMinSuper
+    
     # 数値をランダム生成してポケモンの強さ（CP）を定義
-    pokeCp = Math.floor(Math.random() * (config.cpMax + 1 - config.cpMin))
-    pokeCp += config.cpMin
+    pokeCp = Math.floor(Math.random() * (cpMax + 1 - cpMin))
+    pokeCp += cpMin
 
     # 画像URLのファイル名部分を作成
     img_name = translateData(idx).en.toLowerCase()
@@ -149,7 +175,7 @@ module.exports = (robot) ->
     robot.emit "slack.attachment", data
 
     # もしCPがcpMax-100よりも上だったら驚いてくれます
-    if pokeCp > (config.cpMax - 100)
+    if pokeCp > (cpMax - 100)
         res.send "コイツは手ごわかった！！"
 
     # mongodbに保存する
@@ -167,7 +193,10 @@ module.exports = (robot) ->
     # ポケモンを保存
     robot.brain.set key, pokeList
     # モンスターボールの個数を更新
-    ballData.pokeball = getToday() + (pokeballNow - 1).toString()
+    if useball == "pokeball"
+        ballData.pokeball = getToday() + (pokeballNow - 1).toString()
+    if useball == "superball"
+        ballData.superball = superballNow - 1
     robot.brain.set key_pokeball, ballData
 
 
@@ -409,6 +438,42 @@ module.exports = (robot) ->
 
     res.send "#{target_name} `CP:#{target_cp}` を野生に返したよ！"
 
+
+  ######################################
+  # 所持アイテム一覧表示
+  ######################################
+  robot.respond /pokemon item/, (res) ->
+
+    # モンスターボール保持数チェック
+    key_pokeball = "pokeball_" + res.message.user.name
+    ballData = robot.brain.get(key_pokeball) ? {}
+    if `ballData.pokeball == null`
+        ballData.pokeball = "000000000" # nullの場合は初回アクセスなので0にリセットしておく
+    if `ballData.superball == null`
+        ballData.superball = 0          # nullの場合は初回アクセスなので0にリセットしておく
+
+    # 現在保持しているモンスターボールの個数
+    pokeballNow = parseInt(ballData.pokeball[8])
+    # 現在保持しているスーパーボールの個数
+    superballNow = ballData.superball
+
+    emoji = ""
+    if pokeballNow >= 1
+      for i in [1..pokeballNow]
+        emoji += ":monster_ball:"
+    if superballNow >= 1
+      for i in [1..superballNow]
+        emoji += ":super_ball:"
+    msg = "#{emoji}"
+
+    if msg == ""
+        res.send "何も持ってないよ！"
+        return
+
+    res.send "所持しているアイテムだよ！"
+    res.send msg
+
+
   ######################################
   # アイテムショップ
   ######################################
@@ -429,8 +494,15 @@ module.exports = (robot) ->
                 fallback: "アイテム一覧だよ！"
                 title: "[#{item.id}] #{item.name}"
                 title_link: "#{item.img}?#"+ (new Date/1000|0).toString()
-                text: "#{item.note}\n `購入に必要なモンスターボール数: #{item.price}` "
-                image_url: "#{item.img}?#"+ (new Date/1000|0).toString()
+                text: "#{item.note}\n\n"
+                thumb_url: "#{item.img}?#"+ (new Date/1000|0).toString()
+                "fields": [
+                  {
+                    "title": "価格",
+                    "value": "モンスターボール #{item.price}個",
+                    "short": true
+                  }
+                ]
             attachments.push(attachment)
         data = 
             text: "購入できるアイテムの一覧だよ！"
@@ -440,13 +512,52 @@ module.exports = (robot) ->
         return
         
     if parseInt(target_text[1]) < 1 or parseInt(target_text[1]) > itemList.length
-        res.send "ItemIDは `pokemon shop` で確認してね！"
+        res.send "ItemIDを `pokemon shop` で確認してね！"
         return
-    target = parseInt(target_text[1])
+    # 購入するアイテムのID
+    target_id  = parseInt(target_text[1])
+    # 購入するアイテムのID（配列添字用にマイナス1する）
+    target_idx = target_id - 1
+
+    # mongodbからボール保持数を取得
+    key_pokeball = "pokeball_" + res.message.user.name
+    ballData = robot.brain.get(key_pokeball) ? {}
+    # モンスターボールの保持数を確認
+    if `ballData.pokeball == null`
+        ballData.pokeball = "000000000" # nullの場合は初回アクセスなので0にリセットしておく
+
+    # 最後の数値が現在保持している個数
+    pokeballKeep = parseInt(ballData.pokeball[8])
+
+    if pokeballKeep < itemList[target_idx].price
+        res.send "モンスターボールが足りないよ...。"
+        return
 
     # スーパーボールを購入した場合
-    if target == 1
-        res.send "スーパーボールを購入しました！"
+    if target_id == 1
+        # スーパーボールの保持数を確認
+        if `ballData.superball == null`
+            ballData.superball = 0 # nullの場合は初回アクセスなので0にリセットしておく
+
+        # 最後の数値が現在保持している個数
+        superballKeep = ballData.superball
+
+        # 購入した分1つを足した合計が9個までしか保持できないようにする
+        superballAll = superballKeep + 1
+        # 9個までしか保持できないようにする
+        if superballAll > 9
+            res.send "スーパーボールは9個持ってるからこれ以上持てないよ！"
+            return
+        # スーパーボール保持数を保存する
+        ballData.superball = superballAll
+        robot.brain.set key_pokeball, ballData
+
+    # モンスターボール保持数をprice分だけマイナスする
+    pokeballNow = pokeballKeep - itemList[target_idx].price
+    ballData.pokeball = ballData.pokeball[0..7] +  pokeballNow.toString()
+    robot.brain.set key_pokeball, ballData
+    
+    res.send "#{itemList[target_idx].name} を購入しました！"
 
 
 ##############################################################
