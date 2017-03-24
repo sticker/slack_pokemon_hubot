@@ -129,75 +129,88 @@ module.exports = (robot) ->
     # 数値をランダム生成して、捕まえたポケモンのIDを決定
     pokeSelect = Math.floor(Math.random() * config.max) + 1
 
-    #sleep(4000)
-    national_id = pokeSelect
-    idx = national_id - 1 # 翻訳json用の添字
+    options =
+      url: config.api + pokeSelect + '/'
+      json: true
 
-    cpMax = config.cpMax
-    cpMin = config.cpMin
-    # スーパーボールの場合のCP上限/下限を設定
-    if useball == "superball"
-        cpMax = config.cpMaxSuper
-        cpMin = config.cpMinSuper
-    
-    # 数値をランダム生成してポケモンの強さ（CP）を定義
-    pokeCp = Math.floor(Math.random() * (cpMax + 1 - cpMin))
-    pokeCp += cpMin
+    # APIにリクエスト
+    # 今のところ応答値を全く使っていないのでAPIを使う必要はないが
+    # sleepを効かせたいので使っている
+    request.get options, (err, response, body) ->
+      if response.statusCode == 200
+          sleep(4000)
 
-    # 画像URLのファイル名部分を作成
-    img_name = translateData(idx).en.toLowerCase()
-    img_name = img_name.replace(/\s/, "_")
-    img_name = img_name.replace(/♀/, "_f")
-    img_name = img_name.replace(/♂/, "_m")
-    img_name = img_name.replace(/\.$/, "")
-
-    pokeData =
-        id: national_id
-        name: translateData(idx).ja # 翻訳jsonから該当するポケモンの日本語名を取得します
-        img: config.gif + img_name + ".gif" # 返却値のnameをもとにして、画像URLをつくります
-        cp: pokeCp
-
-    #res.send "<@#{res.message.user.name}> `CP:#{pokeData.cp}` の #{pokeData.name} を捕まえたよ！\n#{pokeData.img}?#"+ (new Date/1000|0).toString()
-    res.send "<@#{res.message.user.name}> `CP:#{pokeData.cp}` の #{pokeData.name} を捕まえたよ！"
-    attachments = []
-    attachment =
-          fallback: "<@#{res.message.user.name}> ポケモン捕まえたよ！"
-          title: "#{pokeData.name}"
-          title_link: "#{pokeData.img}?#"+ (new Date/1000|0).toString()
-          text: "`CP:#{pokeData.cp}`"
-          image_url: "#{pokeData.img}?#"+ (new Date/1000|0).toString()
-          mrkdwn_in: ["text"]
-    attachments.push(attachment)
-    data = 
-        #text: "<@#{res.message.user.name}> `CP:#{pokeData.cp}` の #{pokeData.name} を捕まえたよ！"
-        channel: res.envelope.room
-        attachments: attachments
-    robot.emit "slack.attachment", data
-
-    # もしCPがcpMax-100よりも上だったら驚いてくれます
-    if pokeCp > (cpMax - 100)
-        res.send "コイツは手ごわかった！！"
-
-    # mongodbに保存する
-    key = "pokemon_" + res.message.user.name
-    pokeList = robot.brain.get(key) ? []
-    pokeList.push(pokeData)
-    # すでに6匹以上捕まえていたら一番弱いポケモンを捨てる！（デッキは6匹まで）
-    while pokeList.length > 6
-        # CPの大きい順にソートする
-        pokeList.sort compareCp
-        remove = pokeList.pop() # 一番最後（CPが小さい）を取得して削除
-        res.send "#{remove.name} `CP:#{remove.cp}` は野生に返すね！"
-        if remove.name is pokeData.name and remove.cp is pokeData.cp
-            res.send "今捕まえたばっかりだけど！"
-    # ポケモンを保存
-    robot.brain.set key, pokeList
-    # モンスターボールの個数を更新
-    if useball == "pokeball"
-        ballData.pokeball = getToday() + (pokeballNow - 1).toString()
-    if useball == "superball"
-        ballData.superball = superballNow - 1
-    robot.brain.set key_pokeball, ballData
+          national_id = pokeSelect
+          idx = national_id - 1 # 翻訳json用の添字
+       
+          cpMax = config.cpMax
+          cpMin = config.cpMin
+          # スーパーボールの場合のCP上限/下限を設定
+          if useball == "superball"
+              cpMax = config.cpMaxSuper
+              cpMin = config.cpMinSuper
+          
+          # 数値をランダム生成してポケモンの強さ（CP）を定義
+          pokeCp = Math.floor(Math.random() * (cpMax + 1 - cpMin))
+          pokeCp += cpMin
+       
+          # 画像URLのファイル名部分を作成
+          img_name = translateData(idx).en.toLowerCase()
+          img_name = img_name.replace(/\s/, "_")
+          img_name = img_name.replace(/♀/, "_f")
+          img_name = img_name.replace(/♂/, "_m")
+          img_name = img_name.replace(/\.$/, "")
+       
+          pokeData =
+              id: national_id
+              name: translateData(idx).ja # 翻訳jsonから該当するポケモンの日本語名を取得します
+              img: config.gif + img_name + ".gif"
+              cp: pokeCp
+       
+          #res.send "<@#{res.message.user.name}> `CP:#{pokeData.cp}` の #{pokeData.name} を捕まえたよ！\n#{pokeData.img}?#"+ (new Date/1000|0).toString()
+          res.send "<@#{res.message.user.name}> `CP:#{pokeData.cp}` の #{pokeData.name} を捕まえたよ！"
+          attachments = []
+          attachment =
+                fallback: "<@#{res.message.user.name}> ポケモン捕まえたよ！"
+                title: "#{pokeData.name}"
+                title_link: "#{pokeData.img}?#"+ (new Date/1000|0).toString()
+                text: "`CP:#{pokeData.cp}`"
+                image_url: "#{pokeData.img}?#"+ (new Date/1000|0).toString()
+                mrkdwn_in: ["text"]
+          attachments.push(attachment)
+          data = 
+              #text: "<@#{res.message.user.name}> `CP:#{pokeData.cp}` の #{pokeData.name} を捕まえたよ！"
+              channel: res.envelope.room
+              attachments: attachments
+          robot.emit "slack.attachment", data
+       
+          # もしCPがcpMax-100よりも上だったら驚いてくれます
+          if pokeCp > (cpMax - 100)
+              res.send "コイツは手ごわかった！！"
+       
+          # mongodbに保存する
+          key = "pokemon_" + res.message.user.name
+          pokeList = robot.brain.get(key) ? []
+          pokeList.push(pokeData)
+          # すでに6匹以上捕まえていたら一番弱いポケモンを捨てる！（デッキは6匹まで）
+          while pokeList.length > 6
+              # CPの大きい順にソートする
+              pokeList.sort compareCp
+              remove = pokeList.pop() # 一番最後（CPが小さい）を取得して削除
+              res.send "#{remove.name} `CP:#{remove.cp}` は野生に返すね！"
+              if remove.name is pokeData.name and remove.cp is pokeData.cp
+                  res.send "今捕まえたばっかりだけど！"
+          # ポケモンを保存
+          robot.brain.set key, pokeList
+          # モンスターボールの個数を更新
+          if useball == "pokeball"
+              ballData.pokeball = getToday() + (pokeballNow - 1).toString()
+          if useball == "superball"
+              ballData.superball = superballNow - 1
+          robot.brain.set key_pokeball, ballData
+      else
+          # APIエラーだった場合は、捕まえてきてくれません
+          res.send "<@#{res.message.user.name}> 捕まえるの失敗したよゴメン。。"
 
 
   ######################################
