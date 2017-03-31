@@ -20,6 +20,8 @@ config =
        evo: 1        # 1日に進化させることができる回数
        cpEvoMax: 700 # 進化時の最大増加CP
        cpEvoMin: 200 # 進化時の最小増加CP
+       cpByeMin: 2000 # 野生に返すことでモンスターボールを獲得できる最小CP
+       cpByeStep: 500 # 設定したCPが増えるごとに、獲得できるモンスターボールの個数が増える
 
 ##############################################################
 # グローバル関数定義
@@ -444,10 +446,36 @@ module.exports = (robot) ->
     target_name = pokeList[target].name
     target_cp = pokeList[target].cp
 
+    # 対象のポケモンのCPによってモンスターボールがもらえる
+    ballGet = 0
+    if (pokeList[target].cp - config.cpByeMin) > 0
+        ballGet = Math.floor( (pokeList[target].cp - config.cpByeMin)/config.cpByeStep ) + 1
+
     # mongodbに保存する
     # 指定したポケモンを削除
     pokeList.splice(target, 1)
     robot.brain.set key, pokeList
+    # モンスターボール個数を保存
+    if ballGet > 0
+        # モンスターボールの保持数を確認
+        key_pokeball = "pokeball_" + res.message.user.name
+        ballData = robot.brain.get(key_pokeball) ? {}
+        if `ballData.pokeball == null`
+            ballData.pokeball = "000000000" # nullの場合は初回アクセスなので0にリセットしておく
+
+        # 最後の数値が現在保持している個数
+        pokeballKeep = parseInt(ballData.pokeball[8])
+
+        pokeballNow = pokeballKeep + ballGet
+
+        # 9個までしか保持できないようにする
+        if pokeballNow > 9
+            ballGet = pokeballNow - 9
+            pokeballNow = 9
+        if ballGet > 0
+            ballData.pokeball = ballData.pokeball[0..7] +  pokeballNow.toString()
+            robot.brain.set key_pokeball, ballData
+            res.send "モンスターボールを #{ballGet}個 獲得！"
 
     res.send "#{target_name} `CP:#{target_cp}` を野生に返したよ！"
 
