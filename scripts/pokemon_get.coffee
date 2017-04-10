@@ -330,7 +330,7 @@ module.exports = (robot) ->
   
     # リクエストデータ作成 
     options =
-      url: config.api + pokeList[target].id + '/'
+      url: config.api + pokeList[target].id.toString() + '/'
       json: true
 
     # APIにリクエスト
@@ -350,28 +350,28 @@ module.exports = (robot) ->
               evo_id_exp = /\/api\/v1\/pokemon\/(\d+)\//.exec(evolution.resource_uri)
               evo_id = evo_id_exp[1]
               # アーボック(id:24)　->　ピカチュウ(id:25)
-              continue if pokeList[target].id == "24" and evo_id == "25"
+              continue if pokeList[target].id.toString() == "24" and evo_id == "25"
               # ニドキング(id:34)　->　ピッピ(id:35)
-              continue if pokeList[target].id == "34" and evo_id == "35"
+              continue if pokeList[target].id.toString() == "34" and evo_id == "35"
               # キュウコン(id:38)　->　プリン(id:39)
-              continue if pokeList[target].id == "38" and evo_id == "39"
+              continue if pokeList[target].id.toString() == "38" and evo_id == "39"
               # ガラガラ(id:105)　->　サワムラー(id:106)
-              continue if pokeList[target].id == "105" and evo_id == "106"
+              continue if pokeList[target].id.toString() == "105" and evo_id == "106"
               # サイドン(id:112)　->　ラッキー(id:113)
-              continue if pokeList[target].id == "112" and evo_id == "113"
+              continue if pokeList[target].id.toString() == "112" and evo_id == "113"
               # ストライク(id:123)　->　ルージュラ(id:124)
-              continue if pokeList[target].id == "123" and evo_id == "124"
+              continue if pokeList[target].id.toString() == "123" and evo_id == "124"
               # ルージュラ(id:124)　->　エレブー(id:125)
-              continue if pokeList[target].id == "124" and evo_id == "125"
+              continue if pokeList[target].id.toString() == "124" and evo_id == "125"
               # プテラ(id:142)　->　カビゴン(id:143) 
-              continue if pokeList[target].id == "142" and evo_id == "143"
+              continue if pokeList[target].id.toString() == "142" and evo_id == "143"
 
               evolutions.push(evolution)
 
           if evolutions.length == 0
               res.send "#{pokeList[target].name} は進化できないみたい..."
               return
-                  
+
           # 進化先をランダム選択
           evo_num = Math.floor(Math.random() * evolutions.length)
           evo = evolutions[evo_num]
@@ -389,7 +389,7 @@ module.exports = (robot) ->
           cpEvo += config.cpEvoMin
 
           pokeData =
-              id: evo_id
+              id: parseInt(evo_id)
               name: translateData(idx).ja # 翻訳jsonから該当するポケモンの日本語名を取得します
               img: config.gif + evo_to.toLowerCase() + ".gif" # 返却値のnameをもとにして、画像URLをつくります
               cp: parseInt(pokeList[target].cp) + cpEvo
